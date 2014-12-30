@@ -1,0 +1,164 @@
+The Source Code
+Mysite/urls.py
+##############################################################################
+from django.conf.urls import patterns, include, url
+from django.contrib import admin
+urlpatterns = patterns('',
+    	# Examples:
+    	# url(r'^$', 'mysite.views.home', name='home'),
+    	# url(r'^blog/', include('blog.urls')),
+        url(r'^admin/', include(admin.site.urls)),
+        url(r'^polls/', include('polls.urls',namespace='polls')),
+)
+
+
+Polls/urls.py
+##############################################################################
+from django.conf.urls import patterns,url
+from polls import views
+urlpatterns = patterns('',
+        url(r'^$', views.index, name='index'),
+        url(r'^(?P<question_id>\d+)/$', views.detail, name='detail'),
+        url(r'^(?P<question_id>\d+)/results/$', views.results, name='results'),
+        url(r'^(?P<question_id>\d+)/vote/$', views.vote, name='vote'),
+)
+
+
+Polls/admin.py
+##############################################################################
+from django.contrib import admin
+from polls.models import Question,Choice
+
+# Register your models here.
+class ChoiceInline(admin.TabularInline):
+        model = Choice
+        extra = 1
+class QuestionAdmin(admin.ModelAdmin):
+        fieldsets = [
+                ('Question Name',{'fields':['question_text']}),
+                ('Date Info',{'fields':['pub_date'],'classes':['collapse']}),
+        ]
+        inlines = [ChoiceInline]
+        list_display = ('question_text','pub_date','was_published_recently')
+        list_filter = ['pub_date',]
+        search_fields = ['question_text',]
+admin.site.register(Question,QuestionAdmin)
+
+
+Polls/models.py
+##############################################################################
+from django.db import models
+from django.utils import timezone
+import datetime
+# Create your models here.
+class Question(models.Model):
+        question_text = models.CharField(max_length=200)
+        pub_date = models.DateTimeField('date published')
+        def __str__(self):
+                return self.question_text
+        def was_published_recently(self):
+                return self.pub_date >= timezone.now() - datetime.timedelta(days=1)
+        was_published_recently.admin_order_field = 'pub_date'
+        was_published_recently.boolean = True
+        was_published_recently.short_description = 'Published Recently'
+class Choice(models.Model):
+        question = models.ForeignKey(Question)
+        choice_text = models.CharField(max_length=200)
+        votes = models.IntegerField(default=0)
+        def __str__(self):
+                return self.choice_text
+
+
+Polls/views.py
+##############################################################################
+from django.shortcuts import render,get_object_or_404
+from django.http import HttpResponseRedirect, HttpResponse
+from django.core.urlresolvers import reverse
+from polls.models import Question,Choice
+
+# Create your views here.
+def index(request):
+        latest_question_list = Question.objects.order_by('-pub_date')
+        context = {'latest_question_list': latest_question_list}
+        return render(request, 'polls/index.html', context)
+
+def detail(request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+        return render(request, 'polls/detail.html', {'question': question})
+
+def results(request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+        return render(request, 'polls/results.html', {'question': question})
+
+def vote(request, question_id):
+        p = get_object_or_404(Question, pk=question_id)
+        try:
+                selected_choice = p.choice_set.get(pk=request.POST['choice'])
+        except (KeyError, Choice.DoesNotExist):
+                return render(request, 'polls/detail.html', {
+                        'question': p,
+                        'error_message': "You didn't select a choice.",
+                })
+        else:
+                selected_choice.votes += 1
+                selected_choice.save()
+        return HttpResponseRedirect(reverse('polls:results', args=(p.id,)))
+
+
+Templates/polls/index.html 
+##############################################################################
+{% if latest_question_list %}
+        <ul>
+                {% for question in latest_question_list %}
+                        <li><a href = "{% url 'polls:detail' question.id %}">{{question.question_text}}</a></li>
+                {% endfor %}
+        </ul>
+{% else %}
+        <p>No polls are available.</p>
+{% endif %}
+
+
+Templates/polls/detail.html 
+##############################################################################
+<h1>{{ question.question_text }}</h1>
+{% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
+<form action="{% url 'polls:vote' question.id %}" method="post">
+{% csrf_token %}
+{% for choice in question.choice_set.all %}
+    <input type="radio" name="choice" id="choice{{ forloop.counter }}" value="{{ choice.id }}" />
+    <label for="choice{{ forloop.counter }}">{{ choice.choice_text }}</label><br />
+{% endfor %}
+<input type="submit" value="Vote" />
+</form>
+
+
+Templates/polls/result.html
+##############################################################################
+<h1>{{ question.question_text }}</h1>
+<ul>
+{% for choice in question.choice_set.all %}
+    <li>{{ choice.choice_text }} -- {{ choice.votes }} vote{{ choice.votes|pluralize }}
+</li>
+{% endfor %}
+</ul>
+<a href="{% url 'polls:detail' question.id %}">Vote again?</a>
+
+
+Add a stylesheet and an image.
+polls/static/polls/style.css
+##############################################################################
+li a {
+    color: green;
+}
+
+Next, add the following at the top of polls/templates/polls/index.html:polls/templates/polls/index.html
+#############################################################################
+{% load staticfiles %}
+<link rel="stylesheet" type="text/css" href="{% static 'polls/style.css' %}" />
+
+
+put your image in polls/static/polls/images/background.gif.Then, add to your stylesheet:polls/static/polls/style.css
+#############################################################################
+body {
+    background: white url("images/background.gif") no-repeat right bottom;
+}
